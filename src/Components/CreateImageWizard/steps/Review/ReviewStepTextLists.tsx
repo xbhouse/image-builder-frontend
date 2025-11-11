@@ -22,6 +22,7 @@ import {
 } from './ReviewStepTables';
 
 import {
+  ContentOrigin,
   ON_PREM_RELEASES,
   RELEASES,
   RHEL_10,
@@ -36,6 +37,7 @@ import {
 } from '../../../../constants';
 import {
   useGetTemplateQuery,
+  useListRepositoriesQuery,
   useListSnapshotsByDateMutation,
 } from '../../../../store/contentSourcesApi';
 import { useAppSelector } from '../../../../store/hooks';
@@ -84,6 +86,8 @@ import {
   selectUseLatest,
   selectUsers,
 } from '../../../../store/wizardSlice';
+import { releaseToVersion } from '../../../../Utilities/releaseToVersion';
+import { requiredRedHatRepos } from '../../../../Utilities/requiredRedHatRepos';
 import { toMonthAndYear, yyyyMMddFormat } from '../../../../Utilities/time';
 import MinimumSizePopover from '../FileSystem/components/MinimumSizePopover';
 import { Partition } from '../FileSystem/fscTypes';
@@ -414,6 +418,11 @@ export const ContentList = () => {
   const useLatest = useAppSelector(selectUseLatest);
   const template = useAppSelector(selectTemplate);
   const redHatRepositories = useAppSelector(selectRedHatRepositories);
+  const arch = useAppSelector(selectArchitecture);
+  const distribution = useAppSelector(selectDistribution);
+  const version = releaseToVersion(distribution);
+  const requiredRedHatRepositoriesUrls =
+    requiredRedHatRepos(arch, version) || [];
 
   const customAndRecommendedRepositoryUUIDS = useMemo(
     () =>
@@ -424,6 +433,25 @@ export const ContentList = () => {
     [customRepositories, recommendedRepositories],
   );
 
+  const { data: repoData } = useListRepositoriesQuery(
+    {
+      url:
+        requiredRedHatRepositoriesUrls &&
+        requiredRedHatRepositoriesUrls.length > 1
+          ? requiredRedHatRepositoriesUrls.join(',')
+          : '',
+      origin: ContentOrigin.REDHAT,
+    },
+    { skip: !requiredRedHatRepositoriesUrls?.length },
+  );
+
+  const requiredRedHatRepoUuids = useMemo(() => {
+    if (!repoData?.data) return [];
+    return repoData.data
+      .map((repo) => repo.uuid)
+      .filter((uuid): uuid is string => !!uuid);
+  }, [repoData]);
+
   const [listSnapshotsByDate, { data, isSuccess, isLoading }] =
     useListSnapshotsByDateMutation();
 
@@ -432,7 +460,10 @@ export const ContentList = () => {
 
     listSnapshotsByDate({
       apiListSnapshotByDateRequest: {
-        repository_uuids: customAndRecommendedRepositoryUUIDS,
+        repository_uuids: [
+          ...customAndRecommendedRepositoryUUIDS,
+          ...requiredRedHatRepoUuids,
+        ],
         date: useLatest
           ? yyyyMMddFormat(new Date()) + 'T00:00:00Z'
           : snapshotDate,
@@ -451,7 +482,8 @@ export const ContentList = () => {
 
   const noRepositoriesSelected =
     customAndRecommendedRepositoryUUIDS.length === 0 &&
-    redHatRepositories.length === 0;
+    redHatRepositories.length === 0 &&
+    requiredRedHatRepositoriesUrls.length === 0;
 
   const hasSnapshotDateAfter = data?.data?.some(({ is_after }) => is_after);
 
@@ -540,14 +572,16 @@ export const ContentList = () => {
                 component={ContentVariants.dt}
                 className='pf-v6-u-min-width'
               >
-                Custom repositories
+                Repositories
               </Content>
               <Content component={ContentVariants.dd}>
-                {customRepositories.length + recommendedRepositories.length >
+                {customRepositories.length +
+                  recommendedRepositories.length +
+                  requiredRedHatRepositoriesUrls.length >
                 0 ? (
                   <Popover
                     position='bottom'
-                    headerContent='Custom repositories'
+                    headerContent='Repositories'
                     hasAutoWidth
                     minWidth='30rem'
                     bodyContent={<RepositoriesTable />}
@@ -558,7 +592,8 @@ export const ContentList = () => {
                       className='popover-button pf-v6-u-p-0'
                     >
                       {customRepositories.length +
-                        recommendedRepositories.length || 0}
+                        recommendedRepositories.length +
+                        requiredRedHatRepositoriesUrls.length || 0}
                     </Button>
                   </Popover>
                 ) : (

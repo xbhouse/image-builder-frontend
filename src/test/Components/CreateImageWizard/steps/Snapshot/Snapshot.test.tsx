@@ -199,9 +199,9 @@ describe('repository snapshot tab - ', () => {
     const snapshotMethodElement = await getSnapshotMethodElement();
     // Check date was recorded correctly
     expect(snapshotMethodElement).toHaveTextContent('State as of 2024-04-22');
-    // Check that the button is clickable (has 1 repo selected)
+    // Check that the button is clickable (has 0 repos selected by user but baseos and appstream are pre-selected)
     await waitFor(() => {
-      expect(snapshotMethodElement).toBeDisabled();
+      expect(snapshotMethodElement).toBeEnabled();
     });
   });
 
@@ -294,7 +294,7 @@ describe('repository snapshot tab - ', () => {
     await clickNext();
     await goToReview();
     await clickRevisitButton();
-    await screen.findByRole('heading', { name: /Custom repositories/i });
+    await screen.findByRole('heading', { name: /Repositories/i });
   });
 
   test('select use a content template', async () => {

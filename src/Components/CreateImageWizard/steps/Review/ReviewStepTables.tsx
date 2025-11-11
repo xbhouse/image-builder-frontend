@@ -18,6 +18,7 @@ import {
 } from '../../../../store/contentSourcesApi';
 import { useAppSelector } from '../../../../store/hooks';
 import {
+  selectArchitecture,
   selectCustomRepositories,
   selectDistribution,
   selectFilesystemPartitions,
@@ -27,13 +28,16 @@ import {
   selectTemplate,
 } from '../../../../store/wizardSlice';
 import { getEpelVersionForDistribution } from '../../../../Utilities/epel';
+import { releaseToVersion } from '../../../../Utilities/releaseToVersion';
+import { requiredRedHatRepos } from '../../../../Utilities/requiredRedHatRepos';
 import PackageInfoNotAvailablePopover from '../Packages/components/PackageInfoNotAvailablePopover';
 
 type repoPropType = {
-  repoUuid: string | undefined;
+  repoUuid?: string | undefined;
+  repoUrl?: string | undefined;
 };
 
-const RepoName = ({ repoUuid }: repoPropType) => {
+const RepoName = ({ repoUuid, repoUrl }: repoPropType) => {
   const isSharedEPELEnabled = useFlag('image-builder.shared-epel.enabled');
 
   const originParam = useMemo(() => {
@@ -46,10 +50,11 @@ const RepoName = ({ repoUuid }: repoPropType) => {
     {
       // @ts-ignore if repoUrl is undefined the query is going to get skipped, so it's safe to ignore the linter here
       uuid: repoUuid ?? '',
+      url: repoUrl ?? '',
       contentType: 'rpm',
       origin: originParam,
     },
-    { skip: !repoUuid },
+    { skip: !repoUuid && !repoUrl },
   );
 
   const errorLoading = () => {
@@ -265,6 +270,11 @@ export const RepositoriesTable = () => {
   const recommendedRepositoriesList = useAppSelector(
     selectRecommendedRepositories,
   );
+  const arch = useAppSelector(selectArchitecture);
+  const version = releaseToVersion(distribution);
+  const requiredRedHatRepositoriesUrls =
+    requiredRedHatRepos(arch, version) || [];
+
   return (
     <Panel isScrollable>
       <PanelMain maxHeight='30ch'>
@@ -290,6 +300,13 @@ export const RepositoriesTable = () => {
                 </Td>
               </Tr>
             )}
+            {requiredRedHatRepositoriesUrls.map((url, urlIndex) => (
+              <Tr key={`rhel-${urlIndex}`}>
+                <Td className='pf-m-width-60'>
+                  <RepoName repoUrl={url} />
+                </Td>
+              </Tr>
+            ))}
           </Tbody>
         </Table>
       </PanelMain>
